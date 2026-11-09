@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "experiments/file-search",
+]
+resolver = "2"
+

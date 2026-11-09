@@ -1,0 +1,11 @@
+[package]
+name = "ferrum-file-search"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+xilem = "0.4.0"
+tokio = { version = "1", features = ["sync", "time", "rt"] }
+
+[dev-dependencies]
+tempfile = "3"
