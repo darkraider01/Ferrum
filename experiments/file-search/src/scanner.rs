@@ -226,6 +226,17 @@ pub fn run_scan<F>(
         let read_dir_result = fs::read_dir(&current_dir);
         let entries = match read_dir_result {
             Ok(entries) => entries,
+            Err(err) if current_dir == root => {
+                let error = match err.kind() {
+                    std::io::ErrorKind::NotFound => ScanError::NotFound(root.display().to_string()),
+                    std::io::ErrorKind::PermissionDenied => {
+                        ScanError::PermissionDenied(root.display().to_string())
+                    }
+                    _ => ScanError::Io(err.to_string()),
+                };
+                emit(ScanEvent::Error { scan_id, error });
+                return;
+            }
             Err(_) => {
                 // Inaccessible descendant: continue without failing scan
                 skipped_count += 1;

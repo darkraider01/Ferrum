@@ -59,8 +59,9 @@ impl Default for AppState {
 
 impl AppState {
     pub fn start_scan(&mut self) {
-        // Cancel any existing active scan
-        self.cancel_token.cancel();
+        if self.is_scanning {
+            return;
+        }
 
         self.error_message = None;
 
@@ -102,7 +103,7 @@ impl AppState {
 
     pub fn on_scan_event(&mut self, event: ScanEvent) {
         // Discard events from obsolete/superseded scans
-        if event.scan_id() != self.current_scan_id {
+        if !self.is_scanning || event.scan_id() != self.current_scan_id {
             return;
         }
 
@@ -115,9 +116,26 @@ impl AppState {
                 total_scanned,
                 ..
             } => {
+                let offset = self.scanned_entries.len();
+                let new_matches = search::filter_matches(&entries, &self.query_input);
                 self.scanned_entries.extend(entries);
                 self.total_scanned = total_scanned;
-                self.update_matches();
+                let old_matches = std::mem::take(&mut self.matching_indices);
+                let mut old = old_matches.into_iter().peekable();
+                let mut new = new_matches.into_iter().map(|i| i + offset).peekable();
+                while let (Some(&a), Some(&b)) = (old.peek(), new.peek()) {
+                    if self.scanned_entries[a].relative_path
+                        <= self.scanned_entries[b].relative_path
+                    {
+                        self.matching_indices.push(a);
+                        old.next();
+                    } else {
+                        self.matching_indices.push(b);
+                        new.next();
+                    }
+                }
+                self.matching_indices.extend(old);
+                self.matching_indices.extend(new);
                 self.status_message = format!("Scanning... {} files found", self.total_scanned);
             }
             ScanEvent::Progress {
@@ -218,6 +236,9 @@ pub fn app_logic(state: &mut AppState) -> impl WidgetView<AppState> + use<> {
     });
 
     let current_dir_button = text_button("Use Current (.)", |state: &mut AppState| {
+        if state.is_scanning {
+            return;
+        }
         if let Ok(cwd) = std::env::current_dir() {
             state.root_path_input = cwd.to_string_lossy().to_string();
         } else {
@@ -344,7 +365,7 @@ pub fn app_logic(state: &mut AppState) -> impl WidgetView<AppState> + use<> {
                     // Deliberate capacity: 32 batches of backpressure
                     let (tx, mut rx) = tokio::sync::mpsc::channel::<ScanEvent>(32);
 
-                    let _worker_handle = std::thread::Builder::new()
+                    let worker = std::thread::Builder::new()
                         .name(format!("ferrum-scanner-{scan_id}"))
                         .spawn(move || {
                             scanner::run_scan(
@@ -359,9 +380,22 @@ pub fn app_logic(state: &mut AppState) -> impl WidgetView<AppState> + use<> {
                             );
                         });
 
+                    if let Err(err) = worker {
+                        let (ack, _) = tokio::sync::oneshot::channel();
+                        let _ = proxy.message((
+                            ScanEvent::Error {
+                                scan_id,
+                                error: scanner::ScanError::Io(err.to_string()),
+                            },
+                            ack,
+                        ));
+                        return;
+                    }
+
                     // Forward events from bounded channel to Xilem event loop
                     while let Some(event) = rx.recv().await {
-                        if proxy.message(event).is_err() {
+                        let (ack, acknowledged) = tokio::sync::oneshot::channel();
+                        if proxy.message((event, ack)).is_err() || acknowledged.await.is_err() {
                             // UI event loop disconnected
                             cancel_for_cleanup.cancel();
                             break;
@@ -372,8 +406,9 @@ pub fn app_logic(state: &mut AppState) -> impl WidgetView<AppState> + use<> {
                     cancel_for_cleanup.cancel();
                 }
             },
-            |state: &mut AppState, event: ScanEvent| {
+            |state: &mut AppState, (event, ack): (ScanEvent, tokio::sync::oneshot::Sender<()>)| {
                 state.on_scan_event(event);
+                let _ = ack.send(());
             },
         ))
     } else {
@@ -381,4 +416,49 @@ pub fn app_logic(state: &mut AppState) -> impl WidgetView<AppState> + use<> {
     };
 
     fork(main_layout, task_view)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_scan_cannot_be_restarted() {
+        let mut state = AppState::default();
+        state.start_scan();
+        assert!(state.is_scanning);
+        let scan_id = state.current_scan_id;
+        state.start_scan();
+        assert_eq!(state.current_scan_id, scan_id);
+        assert!(!state.cancel_token.is_cancelled());
+    }
+
+    #[test]
+    fn batches_preserve_sorted_matches_and_ignore_cancelled_events() {
+        let mut state = AppState::default();
+        state.start_scan();
+        let scan_id = state.current_scan_id;
+        for name in ["z.txt", "a.txt"] {
+            state.on_scan_event(ScanEvent::Batch {
+                scan_id,
+                entries: vec![ScannedEntry {
+                    relative_path: name.into(),
+                    filename: name.into(),
+                }],
+                total_scanned: 1,
+            });
+        }
+        let paths: Vec<_> = state
+            .matching_indices
+            .iter()
+            .map(|&i| state.scanned_entries[i].relative_path.as_str())
+            .collect();
+        assert_eq!(paths, ["a.txt", "z.txt"]);
+        state.cancel_scan();
+        state.on_scan_event(ScanEvent::Started {
+            scan_id,
+            root: PathBuf::from("."),
+        });
+        assert!(state.status_message.contains("cancelled"));
+    }
 }

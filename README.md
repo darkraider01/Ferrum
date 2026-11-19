@@ -12,7 +12,7 @@ The central question is whether existing native UI frameworks can provide a cohe
 
 Ferrum is in the research stage. There is no framework implementation or release yet, and performance and platform compatibility have not been established.
 
-The first planned experiment is a file-search application built with Xilem/Masonry. It will exercise background scanning, progress reporting, cancellation, search, and window shutdown alongside text input and accessibility. The results will help determine what Ferrum needs to build and what it can reuse.
+The first experiment is a file-search application built with Xilem/Masonry. It exercises background scanning, progress reporting, cancellation, search, and window shutdown alongside text input and accessibility. The [feasibility report](experiments/file-search/feasibility.md) documents how to run it, what has been tested, and what remains open.
 
 ## What Ferrum Is Exploring
 

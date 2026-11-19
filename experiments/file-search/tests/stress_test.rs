@@ -6,6 +6,43 @@ use ferrum_file_search::scanner::{run_scan, CancellationToken, ScanConfig, ScanE
 use ferrum_file_search::search::filter_matches;
 
 #[test]
+#[cfg(unix)]
+fn unreadable_root_reports_permission_denied() {
+    use ferrum_file_search::scanner::ScanError;
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempdir().unwrap();
+    let root = dir.path().join("unreadable");
+    fs::create_dir(&root).unwrap();
+    fs::set_permissions(&root, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read_dir(&root).is_ok() {
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+        return;
+    }
+    let mut error = None;
+    run_scan(
+        1,
+        root.clone(),
+        ScanConfig::default(),
+        CancellationToken::new(),
+        |event| {
+            if let ScanEvent::Error {
+                error: scan_error, ..
+            } = event
+            {
+                error = Some(scan_error);
+            }
+            true
+        },
+    );
+    fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+    assert_eq!(
+        error,
+        Some(ScanError::PermissionDenied(root.display().to_string()))
+    );
+}
+
+#[test]
 fn test_stress_50k_files_traversal_and_search() {
     let dir = tempdir().unwrap();
     let root = dir.path().to_path_buf();
