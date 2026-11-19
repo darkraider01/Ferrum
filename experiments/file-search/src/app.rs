@@ -4,7 +4,7 @@ use xilem::core::fork;
 use xilem::core::one_of::{Either, OneOf3};
 use xilem::view::{
     flex_col, flex_row, label, portal, sized_box, task_raw, text_button, text_input,
-    virtual_scroll, CrossAxisAlignment, MainAxisAlignment,
+    virtual_scroll, CrossAxisAlignment, FlexExt, MainAxisAlignment,
 };
 use xilem::WidgetView;
 
@@ -247,13 +247,8 @@ pub fn app_logic(state: &mut AppState) -> impl WidgetView<AppState> + use<> {
         state.start_scan();
     });
 
-    let controls_row = flex_row((
-        dir_label,
-        dir_input,
-        scan_button,
-        cancel_button,
-        current_dir_button,
-    ));
+    let directory_row = flex_row((dir_label, dir_input.flex(1.0)));
+    let controls_row = flex_row((scan_button, cancel_button, current_dir_button));
 
     // 2. Search Query Row
     let query_label = label("Search Query:");
@@ -278,12 +273,8 @@ pub fn app_logic(state: &mut AppState) -> impl WidgetView<AppState> + use<> {
         },
     );
 
-    let query_row = flex_row((
-        query_label,
-        query_input,
-        clear_query_button,
-        mode_toggle_button,
-    ));
+    let query_row = flex_row((query_label, query_input.flex(1.0)));
+    let query_controls = flex_row((clear_query_button, mode_toggle_button));
 
     // 3. Status and Error Section
     let status_line = label(format!("Status: {}", state.status_message));
@@ -337,8 +328,10 @@ pub fn app_logic(state: &mut AppState) -> impl WidgetView<AppState> + use<> {
     };
 
     let main_layout = flex_col((
+        directory_row,
         controls_row,
         query_row,
+        query_controls,
         status_line,
         counts_line,
         error_line,

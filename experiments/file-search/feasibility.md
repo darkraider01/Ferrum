@@ -17,7 +17,7 @@ Enter a directory and start a scan. The application scans filenames on a worker 
 
 Only one scan can be active. Cancellation is cooperative: it cannot interrupt a filesystem operation already in progress. Closing the window requests cancellation without joining the worker on the UI thread. Errors opening the root are reported; inaccessible descendants are counted and skipped.
 
-The worker sends batches through a bounded channel. The forwarding task waits for the UI to acknowledge each event before forwarding another, bounding outstanding event-loop messages from this scan. Cancellation drops the receiver when the task view is removed, releasing a worker blocked on the channel. A batch filters only its new entries and merges matching indices into the existing sorted results. Changing the query still filters and sorts the full collection on the UI thread; responsiveness with large result sets has not been established.
+The worker sends batches through a bounded channel. The forwarding task waits for the UI to acknowledge each event before forwarding another, bounding outstanding event-loop messages from this scan. Cancellation drops the receiver when the task view is removed, releasing a worker blocked on the channel. A batch filters only its new entries and merges matching indices into the existing sorted results. Changing the query still filters and sorts the full collection on the UI thread; performance may vary with the dataset and machine.
 
 The default result view uses Masonry's `VirtualScroll`. A portal mode renders at most 500 entries for comparison. Neither mode establishes complete accessibility for large result sets.
 
@@ -28,6 +28,8 @@ The automated tests cover filtering, ordering, traversal, cancellation, and file
 On 20 November 2026, the 13 unit tests and three other integration tests passed. The 50,000-file test hit a quota when its fixture was created under `/tmp`; rerunning it with `TMPDIR` set to a temporary directory in the repository succeeded. In that single debug run, the scanner reported 50,000 files in 192.64 ms, and one filter took 12.36 ms. These are fixture timings, not interactive UI or comparative benchmarks. The temporary directory was removed after the test.
 
 A brief desktop launch created a window, as recorded by the application log. The process was stopped by a 15-second timeout; this does not verify window-close behavior. Interactive scanning, responsiveness, cancellation, IME, and screen-reader interactions were not verified in that launch.
+
+In a later manual check, the project owner reported that filtering and scrolling remained responsive with approximately 390,000 indexed files, and that cancelling, restarting, and closing the window during a scan worked. This is an observation from one machine, not a measured latency or cross-platform result. IME and screen-reader interactions remain unverified.
 
 An earlier run reported window creation and an AT-SPI connection on Fedora Linux with KDE Wayland. That does not establish usable screen-reader output. IME composition and a screen reader have not been manually verified.
 
