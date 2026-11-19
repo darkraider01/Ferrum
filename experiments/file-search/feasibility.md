@@ -25,6 +25,10 @@ The default result view uses Masonry's `VirtualScroll`. A portal mode renders at
 
 The automated tests cover filtering, ordering, traversal, cancellation, and filesystem errors. Run `cargo test` for the current results. The stress fixture exercises scanning and filtering 50,000 files, but does not measure UI responsiveness or queue growth during an interactive scan.
 
+On 20 November 2026, the 13 unit tests and three other integration tests passed. The 50,000-file test hit a quota when its fixture was created under `/tmp`; rerunning it with `TMPDIR` set to a temporary directory in the repository succeeded. In that single debug run, the scanner reported 50,000 files in 192.64 ms, and one filter took 12.36 ms. These are fixture timings, not interactive UI or comparative benchmarks. The temporary directory was removed after the test.
+
+A brief desktop launch created a window, as recorded by the application log. The process was stopped by a 15-second timeout; this does not verify window-close behavior. Interactive scanning, responsiveness, cancellation, IME, and screen-reader interactions were not verified in that launch.
+
 An earlier run reported window creation and an AT-SPI connection on Fedora Linux with KDE Wayland. That does not establish usable screen-reader output. IME composition and a screen reader have not been manually verified.
 
 The earlier report recorded a 132.30 ms scan and an 8.59 ms filter for a 50,000-file fixture, a 25 MB release binary, 91 MB peak release RSS, approximately 115 ms to window creation, and idle CPU below 0.1%. These are historical single-environment observations, not measurements of the current changes or comparisons with an equivalent Electron application. The original report attributed memory measurements to `/usr/bin/time -v` and startup timing to tracing logs; the detailed measurement artifacts are not included here.
