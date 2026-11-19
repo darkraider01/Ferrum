@@ -1,0 +1,10 @@
+[package]
+name = "ferrum-floem-lifecycle"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+floem = { version = "=0.2.0", default-features = false, features = ["vger"] }
